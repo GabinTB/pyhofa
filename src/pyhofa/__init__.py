@@ -2,6 +2,7 @@
 
 from ._types import AdaptiveResult, FactorResult, PortfolioResult, SelectionResult, SimulationResult
 from .adaptive import Adaptive_HFA, adaptive_hfa
+from .alignment import align_columns, align_loadings
 from .estimators import (
     M2_gmm,
     M2_mle,
@@ -50,6 +51,8 @@ __all__ = [
     "SimulationResult",
     "adaptive_hfa",
     "Adaptive_HFA",
+    "align_columns",
+    "align_loadings",
     "m2_select",
     "m3_select",
     "m4_select",

@@ -61,12 +61,15 @@ def safe_pinv(a: ArrayLike, *, rcond: float = 1e-12) -> FloatArray:
     return np.linalg.pinv(np.asarray(a, dtype=np.float64), rcond=rcond)
 
 
-def align_columns(reference: FloatArray, candidate: FloatArray) -> FloatArray:
-    """Resolve eigenvector sign indeterminacy column-wise."""
-    aligned = candidate.copy()
-    n_cols = min(reference.shape[1], candidate.shape[1])
+def align_columns(reference: ArrayLike, candidate: ArrayLike) -> FloatArray:
+    """Resolve sign indeterminacy between corresponding matrix columns."""
+    reference_matrix = as_2d_float(reference, name="reference")
+    aligned = as_2d_float(candidate, name="candidate").copy()
+    if reference_matrix.shape[0] != aligned.shape[0]:
+        raise ValueError("reference and candidate must have the same number of rows")
+    n_cols = min(reference_matrix.shape[1], aligned.shape[1])
     for j in range(n_cols):
-        if float(reference[:, j] @ aligned[:, j]) < 0.0:
+        if float(reference_matrix[:, j] @ aligned[:, j]) < 0.0:
             aligned[:, j] *= -1.0
     return aligned
 
