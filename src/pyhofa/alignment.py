@@ -28,15 +28,15 @@ def align_loadings(
     reference: ArrayLike,
     candidate: ArrayLike,
     *,
-    allow_rotation: bool = False,
+    allow_rotation: bool = True,
 ) -> FloatArray:
     """Align candidate loadings to a reference fit.
 
-    By default, Hungarian matching maximizes absolute column correlation and
-    then resolves signs. With ``allow_rotation=True``, an orthogonal
-    Procrustes transformation aligns the candidate factor subspace directly.
-    Both matrices must have the same shape, as expected when the factor count
-    is fixed across rolling fits.
+    By default, an orthogonal Procrustes transformation aligns the candidate
+    factor subspace directly. Set ``allow_rotation=False`` to instead use
+    Hungarian matching on absolute column correlations followed by sign
+    resolution. Both matrices must have the same shape, as expected when the
+    factor count is fixed across rolling fits.
     """
     reference_matrix = as_2d_float(reference, name="reference")
     candidate_matrix = as_2d_float(candidate, name="candidate")

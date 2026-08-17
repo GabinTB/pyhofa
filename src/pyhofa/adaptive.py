@@ -37,6 +37,11 @@ def adaptive_hfa(
     :func:`pyhofa.project` with the returned ``loadings``, ``mean_`` and
     ``scale_``. Fitting on the full sample and slicing ``factors`` leaks test
     observations into both preprocessing and loading estimation.
+
+    ``cumulant_order_f`` records the factor-order winner by FCR, while the
+    returned ``factors`` are projected onto the selected loading order
+    ``cumulant_order_u``. This keeps ``factors`` consistent with ``loadings``
+    and with :func:`pyhofa.project` when the two selected orders differ.
     """
     if max_order not in {3, 4}:
         raise ValueError("max_order must be 3 or 4")
@@ -118,7 +123,7 @@ def adaptive_hfa(
     order_u = max(estimates, key=lambda order: loading_scores[order])
 
     return AdaptiveResult(
-        estimates[order_f].factors,
+        estimates[order_u].factors,
         estimates[order_u].loadings,
         order_f,
         order_u,

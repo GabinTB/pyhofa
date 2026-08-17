@@ -55,3 +55,28 @@ def test_adaptive_result_exposes_training_statistics() -> None:
 
     np.testing.assert_allclose(result.mean_, x.mean(axis=0))
     np.testing.assert_allclose(result.scale_, x.std(axis=0, ddof=1))
+
+
+def test_adaptive_projection_round_trip_when_selected_orders_differ() -> None:
+    rng = np.random.default_rng(0)
+    t, n = 40, 8
+    factors = np.column_stack(
+        [
+            rng.standard_t(3, size=t),
+            rng.normal(size=t),
+            rng.exponential(size=t) - 1.0,
+        ]
+    )
+    loadings = rng.normal(size=(n, 3))
+    x = factors @ loadings.T + 0.5 * rng.normal(size=(t, n))
+
+    result = adaptive_hfa(x, r=3, max_order=3, rmax=4, tau_nt=10.0)
+
+    assert result.cumulant_order_f != result.cumulant_order_u
+    projected = project(
+        x,
+        result.loadings,
+        mean=result.mean_,
+        scale=result.scale_,
+    )
+    np.testing.assert_allclose(projected, result.factors, atol=1e-12)

@@ -147,11 +147,14 @@ factors_window = project(
 reference_loadings = aligned_loadings
 ```
 
-The default alignment resolves permutations and signs using globally optimal
-Hungarian matching on absolute column correlations. Set `allow_rotation=True`
-to align correlated factor subspaces by orthogonal Procrustes rotation. Always
-recompute factor scores from the aligned loadings, because permuting or rotating
-loadings changes the corresponding factor coordinates.
+The default alignment uses orthogonal Procrustes rotation and is the recommended
+choice for chained rolling fits with weak or correlated factors. Set
+`allow_rotation=False` to use globally optimal Hungarian matching on absolute
+column correlations followed by sign resolution when factors should only be
+permuted and sign-flipped. Use `align_columns` only when column identities are
+already fixed and the remaining indeterminacy is sign-only. Always recompute
+factor scores from the aligned loadings, because permuting or rotating loadings
+changes the corresponding factor coordinates.
 
 ### ML and GMM
 
