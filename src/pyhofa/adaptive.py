@@ -25,6 +25,13 @@ def adaptive_hfa(
 
     The estimator chooses between covariance, third-order and optionally
     fourth-order cumulant estimators using factor contribution ratios (FCRs).
+
+    Higher-order estimates use the split selected by GER3 and GER4: the
+    largest selected non-Gaussian count is retained and the remaining factors
+    are estimated from residual covariance as Gaussian components. The
+    second-order candidate has no such distinction, so its FCR compares a PCA
+    model with the structured higher-order candidates whenever Gaussian
+    factors are selected.
     """
     if max_order not in {3, 4}:
         raise ValueError("max_order must be 3 or 4")
@@ -33,13 +40,13 @@ def adaptive_hfa(
     if tau_nt is None:
         tau_nt = 2.0 * t**0.25 / n
 
+    selection3 = m3_select(data, rmax=rmax, method="GER3")
+    # Preserve the original adaptive rule, which also checks fourth-order
+    # selection even when max_order=3.
+    selection4 = m4_select(data, rmax=rmax, method="GER4")
     if r is None:
         r2 = m2_select(data, rmax=rmax, method="ER", modified=True).n_factors
-        r3 = m3_select(data, rmax=rmax, method="GER3").n_nongaussian or 0
-        # Preserve the original adaptive rule, which also checks fourth-order
-        # selection even when max_order=3.
-        r4 = m4_select(data, rmax=rmax, method="GER4").n_nongaussian or 0
-        r = max(r2, r3, r4)
+        r = max(r2, selection3.n_factors, selection4.n_factors)
     if r < 0 or r > min(t, n):
         raise ValueError("r must lie between 0 and min(t, n)")
     if r == 0:
@@ -50,7 +57,15 @@ def adaptive_hfa(
             2,
             0,
             {2: 0.0, 3: 0.0, 4: 0.0},
+            0,
+            0,
         )
+
+    n_nongaussian = min(
+        r,
+        max(selection3.n_nongaussian or 0, selection4.n_nongaussian or 0),
+    )
+    n_gaussian = r - n_nongaussian
 
     cov = np.cov(data, rowvar=False, ddof=1)
     ev2, _ = eigh_desc(cov)
@@ -75,10 +90,20 @@ def adaptive_hfa(
         fcrs[4] = fcr(ev4)
 
     res2 = m2_pca(data, r, method="PCA")
-    res3 = m3_als(data, gamma=(0.0, 1.0), rh=r, rg=0)
+    res3 = m3_als(
+        data,
+        gamma=(0.0, 1.0),
+        rh=n_nongaussian,
+        rg=n_gaussian,
+    )
     estimates = {2: res2, 3: res3}
     if max_order == 4:
-        estimates[4] = m4_als(data, gamma=(0.0, 0.0, 1.0), rh=r, rg=0)
+        estimates[4] = m4_als(
+            data,
+            gamma=(0.0, 0.0, 1.0),
+            rh=n_nongaussian,
+            rg=n_gaussian,
+        )
 
     order_f = max(estimates, key=lambda order: fcrs[order])
     loading_scores = dict(fcrs)
@@ -92,6 +117,8 @@ def adaptive_hfa(
         order_u,
         r,
         fcrs,
+        n_nongaussian,
+        n_gaussian,
     )
 
 

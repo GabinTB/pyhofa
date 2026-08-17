@@ -1,6 +1,8 @@
 import numpy as np
+import pytest
 
 from pyhofa import adaptive_hfa, dgp2, m2_select, m3_select, m4_select
+from pyhofa._types import FactorResult, SelectionResult
 
 
 def _panel() -> np.ndarray:
@@ -44,3 +46,85 @@ def test_adaptive_hfa_explicit_factor_count() -> None:
     assert result.cumulant_order_f in {2, 3}
     assert result.cumulant_order_u in {2, 3}
     assert set(result.factor_contribution_ratios) == {2, 3}
+    assert result.n_nongaussian + result.n_gaussian == result.n_factors
+    assert result.Rh == result.n_nongaussian
+    assert result.Rg == result.n_gaussian
+
+
+def test_adaptive_hfa_threads_selected_split_into_als(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import pyhofa.adaptive as adaptive_module
+
+    x = np.arange(60, dtype=np.float64).reshape(12, 5)
+    calls: list[tuple[str, int, int]] = []
+
+    monkeypatch.setattr(
+        adaptive_module,
+        "m3_select",
+        lambda *args, **kwargs: SelectionResult(3, n_nongaussian=2, n_gaussian=1),
+    )
+    monkeypatch.setattr(
+        adaptive_module,
+        "m4_select",
+        lambda *args, **kwargs: SelectionResult(4, n_nongaussian=2, n_gaussian=2),
+    )
+
+    def fake_als(
+        data: np.ndarray,
+        *,
+        rh: int,
+        rg: int,
+        gamma: tuple[float, ...],
+    ) -> FactorResult:
+        calls.append((f"m{len(gamma) + 1}", rh, rg))
+        loadings = np.zeros((data.shape[1], rh + rg))
+        factors = np.zeros((data.shape[0], rh + rg))
+        return FactorResult(factors, loadings, data.copy())
+
+    monkeypatch.setattr(adaptive_module, "m3_als", fake_als)
+    monkeypatch.setattr(adaptive_module, "m4_als", fake_als)
+
+    result = adaptive_hfa(x, r=4, max_order=4)
+
+    assert calls == [("m3", 2, 2), ("m4", 2, 2)]
+    assert result.n_nongaussian == 2
+    assert result.n_gaussian == 2
+
+
+def test_adaptive_hfa_uses_total_selected_factor_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import pyhofa.adaptive as adaptive_module
+
+    x = np.arange(60, dtype=np.float64).reshape(12, 5)
+    monkeypatch.setattr(
+        adaptive_module,
+        "m2_select",
+        lambda *args, **kwargs: SelectionResult(3),
+    )
+    monkeypatch.setattr(
+        adaptive_module,
+        "m3_select",
+        lambda *args, **kwargs: SelectionResult(3, n_nongaussian=3, n_gaussian=0),
+    )
+    monkeypatch.setattr(
+        adaptive_module,
+        "m4_select",
+        lambda *args, **kwargs: SelectionResult(4, n_nongaussian=3, n_gaussian=1),
+    )
+    monkeypatch.setattr(
+        adaptive_module,
+        "m3_als",
+        lambda data, *, rh, rg, gamma: FactorResult(
+            np.zeros((data.shape[0], rh + rg)),
+            np.zeros((data.shape[1], rh + rg)),
+            data.copy(),
+        ),
+    )
+
+    result = adaptive_hfa(x, max_order=3, rmax=4)
+
+    assert result.n_factors == 4
+    assert result.n_nongaussian == 3
+    assert result.n_gaussian == 1

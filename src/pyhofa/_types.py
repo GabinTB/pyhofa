@@ -78,6 +78,8 @@ class AdaptiveResult:
     cumulant_order_u: int
     n_factors: int
     factor_contribution_ratios: dict[int, float]
+    n_nongaussian: int = 0
+    n_gaussian: int = 0
 
     @property
     def f(self) -> FloatArray:
@@ -86,6 +88,16 @@ class AdaptiveResult:
     @property
     def u(self) -> FloatArray:
         return self.loadings
+
+    @property
+    def Rh(self) -> int:  # noqa: N802
+        """Compatibility alias for the non-Gaussian factor count."""
+        return self.n_nongaussian
+
+    @property
+    def Rg(self) -> int:  # noqa: N802
+        """Compatibility alias for the Gaussian factor count."""
+        return self.n_gaussian
 
 
 @dataclass(slots=True)
