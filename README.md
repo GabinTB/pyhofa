@@ -104,6 +104,25 @@ print(result.cumulant_order_u)
 print(result.factor_contribution_ratios)
 ```
 
+For out-of-sample evaluation, fit on the training block and reuse its frozen
+preprocessing statistics and loadings:
+
+```python
+from pyhofa import project
+
+fit = adaptive_hfa(X_train, r=2, max_order=4, scale=True)
+factors_test = project(
+    X_test,
+    fit.loadings,
+    mean=fit.mean_,
+    scale=fit.scale_,
+)
+```
+
+Do not fit on the full sample and then slice the returned factors. That uses
+test observations to estimate the column means, scales and loadings, causing
+look-ahead leakage.
+
 ### ML and GMM
 
 ```python

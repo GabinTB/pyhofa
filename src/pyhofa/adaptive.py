@@ -6,7 +6,7 @@ import numpy as np
 from numpy.typing import ArrayLike
 
 from ._types import AdaptiveResult
-from ._utils import center_scale, eigh_desc
+from ._utils import eigh_desc, fit_center_scale
 from .estimators import m2_pca, m3_als, m4_als
 from .moments import c4m, m3m
 from .selection import m2_select, m3_select, m4_select
@@ -32,10 +32,15 @@ def adaptive_hfa(
     second-order candidate has no such distinction, so its FCR compares a PCA
     model with the structured higher-order candidates whenever Gaussian
     factors are selected.
+
+    For out-of-sample evaluation, fit only on the training block and call
+    :func:`pyhofa.project` with the returned ``loadings``, ``mean_`` and
+    ``scale_``. Fitting on the full sample and slicing ``factors`` leaks test
+    observations into both preprocessing and loading estimation.
     """
     if max_order not in {3, 4}:
         raise ValueError("max_order must be 3 or 4")
-    data = center_scale(x, scale=scale)
+    data, fitted_mean, fitted_scale = fit_center_scale(x, scale=scale)
     t, n = data.shape
     if tau_nt is None:
         tau_nt = 2.0 * t**0.25 / n
@@ -59,6 +64,8 @@ def adaptive_hfa(
             {2: 0.0, 3: 0.0, 4: 0.0},
             0,
             0,
+            fitted_mean,
+            fitted_scale,
         )
 
     n_nongaussian = min(
@@ -119,6 +126,8 @@ def adaptive_hfa(
         fcrs,
         n_nongaussian,
         n_gaussian,
+        fitted_mean,
+        fitted_scale,
     )
 
 

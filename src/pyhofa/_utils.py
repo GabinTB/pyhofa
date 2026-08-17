@@ -22,14 +22,29 @@ def as_2d_float(x: ArrayLike, *, name: str = "X") -> FloatArray:
 
 def center_scale(x: ArrayLike, *, scale: bool = False, ddof: int = 1) -> FloatArray:
     """Center columns and optionally scale them to unit sample variance."""
+    out, _, _ = fit_center_scale(x, scale=scale, ddof=ddof)
+    return out
+
+
+def fit_center_scale(
+    x: ArrayLike,
+    *,
+    center: bool = True,
+    scale: bool = False,
+    ddof: int = 1,
+) -> tuple[FloatArray, FloatArray, FloatArray | None]:
+    """Preprocess a panel and return the fitted column statistics."""
     out = as_2d_float(x).copy()
-    out -= out.mean(axis=0, keepdims=True)
+    mean = out.mean(axis=0) if center else np.zeros(out.shape[1], dtype=np.float64)
+    out -= mean
+    fitted_scale: FloatArray | None = None
     if scale:
         std = out.std(axis=0, ddof=ddof)
         if np.any(std <= np.finfo(float).eps):
             raise ValueError("cannot scale a constant column")
         out /= std
-    return out
+        fitted_scale = std
+    return out, mean, fitted_scale
 
 
 def eigh_desc(a: ArrayLike) -> tuple[FloatArray, FloatArray]:

@@ -38,6 +38,7 @@ from .moments import (
     variable_moment,
 )
 from .portfolio import Portfolio_IC, Portfolio_PC, portfolio_ic, portfolio_pc
+from .projection import project
 from .selection import M2_select, M3_select, M4_select, m2_select, m3_select, m4_select
 from .simulation import dgp1, dgp2, hofa_DGP1, hofa_DGP2, sgt_moment, sgt_rvs
 
@@ -90,6 +91,7 @@ __all__ = [
     "portfolio_pc",
     "Portfolio_IC",
     "Portfolio_PC",
+    "project",
     "sgt_rvs",
     "sgt_moment",
     "dgp1",

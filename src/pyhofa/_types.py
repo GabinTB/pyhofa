@@ -20,6 +20,8 @@ class FactorResult:
     residuals: FloatArray
     eigenvalues: FloatArray | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    mean_: FloatArray | None = None
+    scale_: FloatArray | None = None
 
     @property
     def f(self) -> FloatArray:
@@ -80,6 +82,8 @@ class AdaptiveResult:
     factor_contribution_ratios: dict[int, float]
     n_nongaussian: int = 0
     n_gaussian: int = 0
+    mean_: FloatArray | None = None
+    scale_: FloatArray | None = None
 
     @property
     def f(self) -> FloatArray:

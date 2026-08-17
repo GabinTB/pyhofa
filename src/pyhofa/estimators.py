@@ -14,6 +14,7 @@ from ._utils import (
     as_2d_float,
     center_scale,
     eigh_desc,
+    fit_center_scale,
     safe_pinv,
     select_ar_order_aic,
 )
@@ -44,14 +45,11 @@ def m2_pca(
     if r > min(t, n):
         raise ValueError("r exceeds the rank bound min(t, n)")
     method = method.upper()
-    data = raw.copy()
-    if center:
-        data -= data.mean(axis=0, keepdims=True)
-    if scale:
-        std = data.std(axis=0, ddof=1)
-        if np.any(std <= np.finfo(float).eps):
-            raise ValueError("cannot scale a constant column")
-        data /= std
+    data, fitted_mean, fitted_scale = fit_center_scale(
+        raw,
+        center=center,
+        scale=scale,
+    )
 
     if method == "PCA":
         covariance = data.T @ data / max(t - 1, 1)
@@ -59,7 +57,15 @@ def m2_pca(
         loadings = vectors[:, :r] * np.sqrt(n)
         factors = data @ loadings / n
         residuals = data - factors @ loadings.T
-        return FactorResult(factors, loadings, residuals, values / t, {"method": "PCA"})
+        return FactorResult(
+            factors,
+            loadings,
+            residuals,
+            values / t,
+            {"method": "PCA"},
+            fitted_mean,
+            fitted_scale,
+        )
 
     if method not in {"P-PCA", "PPCA", "PROJECTED-PCA"}:
         raise ValueError(f"unknown PCA method: {method!r}")
@@ -100,6 +106,8 @@ def m2_pca(
         residuals,
         values,
         {"method": "P-PCA", "G": g_hat, "gamma": gamma_hat, "sieve_terms": sieve_terms},
+        fitted_mean,
+        fitted_scale,
     )
 
 
@@ -368,7 +376,7 @@ def m2_mle(
     """
     if r < 1:
         raise ValueError("r must be positive")
-    data = center_scale(x, scale=scale)
+    data, fitted_mean, fitted_scale = fit_center_scale(x, scale=scale)
     t, n = data.shape
     if r > min(t, n):
         raise ValueError("r exceeds the rank bound")
@@ -394,7 +402,14 @@ def m2_mle(
         "ml_iterations": ml_iterations,
     }
     if method in {"ML", "QML"}:
-        return FactorResult(f, u, e, metadata=metadata)
+        return FactorResult(
+            f,
+            u,
+            e,
+            metadata=metadata,
+            mean_=fitted_mean,
+            scale_=fitted_scale,
+        )
 
     if method == "ML-EM":
         if ar_order != 1:
@@ -435,7 +450,14 @@ def m2_mle(
             "dynamic_iterations": dynamic_iterations,
         }
     )
-    return FactorResult(f, u, e, metadata=metadata)
+    return FactorResult(
+        f,
+        u,
+        e,
+        metadata=metadata,
+        mean_=fitted_mean,
+        scale_=fitted_scale,
+    )
 
 
 def _gmm_initial(
@@ -516,6 +538,8 @@ def m2_gmm(
         residuals,
         values,
         {"method": "M2-GMM", "weight": weight, "initial_residuals": init_e},
+        raw.mean(axis=0),
+        None,
     )
 
 
@@ -577,6 +601,8 @@ def m3_gmm(
             "weight": weight,
             "initial_factor_skew": np.mean(init_f**3, axis=0),
         },
+        raw.mean(axis=0),
+        None,
     )
 
 
@@ -601,7 +627,7 @@ def m3_als(
     max_iter: int = 1000,
 ) -> FactorResult:
     """Third-order alternating least-squares HFA estimator."""
-    data = center_scale(x, scale=scale)
+    data, fitted_mean, fitted_scale = fit_center_scale(x, scale=scale)
     t, n = data.shape
     del t
     if rh < 0 or rg < 0 or rh + rg < 1 or rh + rg > n:
@@ -614,7 +640,15 @@ def m3_als(
         loadings = vectors[:, :rg] * np.sqrt(n)
         factors = data @ loadings / n
         residuals = data - factors @ loadings.T
-        return FactorResult(factors, loadings, residuals, values, {"iterations": 0})
+        return FactorResult(
+            factors,
+            loadings,
+            residuals,
+            values,
+            {"iterations": 0},
+            fitted_mean,
+            fitted_scale,
+        )
 
     joint = g2 * m2m(data) / n**2 + g3 * m3m(data) / n**3
     initial_values, vectors = eigh_desc(joint)
@@ -622,7 +656,15 @@ def m3_als(
     fh = data @ uh / n
     if rg == 0:
         residuals = data - fh @ uh.T
-        return FactorResult(fh, uh, residuals, initial_values, {"iterations": 0})
+        return FactorResult(
+            fh,
+            uh,
+            residuals,
+            initial_values,
+            {"iterations": 0},
+            fitted_mean,
+            fitted_scale,
+        )
 
     ug, _ = _gaussian_components(data - fh @ uh.T, rg, n)
     for iteration in range(1, max_iter + 1):
@@ -644,7 +686,15 @@ def m3_als(
     loadings = np.column_stack([uh, ug])
     factors = data @ loadings / n
     residuals = data - factors @ loadings.T
-    return FactorResult(factors, loadings, residuals, initial_values, {"iterations": iteration})
+    return FactorResult(
+        factors,
+        loadings,
+        residuals,
+        initial_values,
+        {"iterations": iteration},
+        fitted_mean,
+        fitted_scale,
+    )
 
 
 def m4_als(
@@ -663,7 +713,7 @@ def m4_als(
     the ALS loop. The R source uses ``n**3`` only inside the loop, which is an
     internal inconsistency and is treated here as a typo.
     """
-    data = center_scale(x, scale=scale)
+    data, fitted_mean, fitted_scale = fit_center_scale(x, scale=scale)
     t, n = data.shape
     if rh < 0 or rg < 0 or rh + rg < 1 or rh + rg > n:
         raise ValueError("rh and rg must be non-negative and sum to 1..n")
@@ -675,7 +725,15 @@ def m4_als(
         loadings = vectors[:, :rg] * np.sqrt(n)
         factors = data @ loadings / n
         residuals = data - factors @ loadings.T
-        return FactorResult(factors, loadings, residuals, values, {"iterations": 0})
+        return FactorResult(
+            factors,
+            loadings,
+            residuals,
+            values,
+            {"iterations": 0},
+            fitted_mean,
+            fitted_scale,
+        )
 
     covariance = data.T @ data / t
     joint = (
@@ -688,7 +746,15 @@ def m4_als(
     fh = data @ uh / n
     if rg == 0:
         residuals = data - fh @ uh.T
-        return FactorResult(fh, uh, residuals, initial_values, {"iterations": 0})
+        return FactorResult(
+            fh,
+            uh,
+            residuals,
+            initial_values,
+            {"iterations": 0},
+            fitted_mean,
+            fitted_scale,
+        )
 
     ug, _ = _gaussian_components(data - fh @ uh.T, rg, n)
     for iteration in range(1, max_iter + 1):
@@ -715,7 +781,15 @@ def m4_als(
     loadings = np.column_stack([uh, ug])
     factors = data @ loadings / n
     residuals = data - factors @ loadings.T
-    return FactorResult(factors, loadings, residuals, initial_values, {"iterations": iteration})
+    return FactorResult(
+        factors,
+        loadings,
+        residuals,
+        initial_values,
+        {"iterations": iteration},
+        fitted_mean,
+        fitted_scale,
+    )
 
 
 # Compatibility aliases for the R-style function names.
