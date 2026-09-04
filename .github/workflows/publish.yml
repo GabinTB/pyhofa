@@ -50,29 +50,9 @@ jobs:
           path: dist/
           if-no-files-found: error
 
-  pypi:
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-
-    environment:
-      name: pypi
-      url: https://pypi.org/p/pyhofa
-
-    permissions:
-      id-token: write
-
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-      - uses: pypa/gh-action-pypi-publish@release/v1
-
   testpypi:
     needs: build
-    if: github.event_name == 'workflow_dispatch'
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     environment:
@@ -92,3 +72,78 @@ jobs:
         with:
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
+
+  validate-testpypi:
+    needs: testpypi
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Determine expected version
+        id: version
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Install from TestPyPI and smoke test
+        env:
+          EXPECTED_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          uv venv /tmp/validate --python 3.12
+
+          # TestPyPI indexing can lag a few seconds after upload; retry.
+          for i in $(seq 1 10); do
+            uv pip install --python /tmp/validate/bin/python \
+              --index-url https://test.pypi.org/simple/ \
+              --extra-index-url https://pypi.org/simple/ \
+              "pyhofa==${EXPECTED_VERSION}" && break
+            echo "install attempt $i failed, retrying in 15s..."
+            sleep 15
+          done
+
+          /tmp/validate/bin/python - <<'PY'
+          import os
+
+          import pyhofa
+
+          expected = os.environ["EXPECTED_VERSION"]
+          assert pyhofa.__version__ == expected, (pyhofa.__version__, expected)
+          print(f"pyhofa {pyhofa.__version__} imported from TestPyPI")
+
+          sim = pyhofa.dgp2(
+              n=50, t=100, k=1,
+              factor_lambda=[0.8], factor_p=[1.0], factor_ar=[0.5],
+              random_state=0,
+          )
+          pyhofa.m2_pca(sim.X, r=1)
+          print("smoke test passed")
+          PY
+
+  pypi:
+    needs: validate-testpypi
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+
+    environment:
+      name: pypi
+      url: https://pypi.org/p/pyhofa
+
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1

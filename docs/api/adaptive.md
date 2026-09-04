@@ -1,0 +1,3 @@
+# pyhofa.adaptive
+
+::: pyhofa.adaptive

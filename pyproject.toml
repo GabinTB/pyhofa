@@ -28,6 +28,12 @@ dependencies = [
   "scikit-learn>=1.4",
 ]
 
+[project.urls]
+Homepage = "https://gabintb.github.io/pyhofa/"
+Documentation = "https://gabintb.github.io/pyhofa/"
+Repository = "https://github.com/GabinTB/pyhofa"
+"Bug Tracker" = "https://github.com/GabinTB/pyhofa/issues"
+
 [dependency-groups]
 dev = [
   "pytest>=8.0",
@@ -37,6 +43,8 @@ dev = [
   "pandas-datareader>=0.10",
   "matplotlib>=3.8",
   "ipykernel>=7.0",
+  "mkdocs-material>=9.0",
+  "mkdocstrings[python]>=0.25",
 ]
 
 [tool.setuptools.packages.find]
